@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sistema de Autenticación - Registro de Cargas de Agua</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body { 
+            font-family: 'Segoe UI', system-ui, sans-serif; 
+            background-image: linear-gradient(170deg, #eef6ff 0%, #dbeafe 100%);
+            min-height: 100vh;
+            transition: all 0.3s ease;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            transition: all 0.3s ease;
+        }
+        .loading-spinner { 
+            display: none; 
+            border: 3px solid rgba(255,255,255,0.3); 
+            border-left-color: #fff; 
+            border-radius: 50%; 
+            width: 20px; 
+            height: 20px; 
+            animation: spin 1s linear infinite; 
+        }
+        @keyframes spin { 
+            to { transform: rotate(360deg); } 
+        }
+        .btn-loading .loading-spinner { display: block; }
+        .btn-loading .btn-text { display: none; }
+        .password-container {
+            position: relative;
+        }
+        .toggle-password {
+            position: absolute;
+            right: 12px;
+            top: 42px;
+            cursor: pointer;
+            color: #6b7280;
+            transition: color 0.3s ease;
+        }
+        .toggle-password:hover {
+            color: #2563eb;
+        }
+        .hidden {
+            display: none;
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .session-timer {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 10px 15px;
+            border-radius: 25px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <main class="w-full max-w-md">
+        <section class="card p-8">
+            <!-- Sección de Login (visible inicialmente) -->
+            <div id="login-section">
+                <div class="flex justify-center mb-6">
+                    <img src="logo.png" alt="Logo" class="h-16">
+                </div>
+                
+                <h1 class="text-2xl font-bold text-center text-gray-800 mb-2">Iniciar Sesión</h1>
+                <p class="text-center text-gray-600 mb-8">Sistema de Registro de Cargas de Agua</p>
+                
+                <form id="login-form">
+                    <div class="mb-4">
+                        <label for="username" class="block text-sm font-medium text-gray-700 mb-1">Usuario</label>
+                        <input type="text" id="username" name="username" required 
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                               placeholder="Ingresa tu usuario" autocomplete="username">
+                    </div>
+                    
+                    <div class="mb-6 password-container">
+                        <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+                        <input type="password" id="password" name="password" required 
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                               placeholder="Ingresa tu contraseña" autocomplete="current-password">
+                        <span class="toggle-password" id="toggle-password">
+                            <i class="far fa-eye"></i>
+                        </span>
+                    </div>
+                    
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="remember-me" name="remember-me" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <label for="remember-me" class="ml-2 block text-sm text-gray-700">Recordar mi usuario</label>
+                        </div>
+                        
+                        <a href="#" id="test-connection" class="text-sm text-blue-600 hover:text-blue-800">Probar conexión</a>
+                    </div>
+                    
+                    <button type="submit" id="login-button" 
+                            class="w-full py-3 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition flex justify-center items-center">
+                        <div class="loading-spinner" id="login-spinner"></div>
+                        <span class="btn-text">Ingresar al Sistema</span>
+                    </button>
+                </form>
+            </div>
+            
+            <!-- Sección de la Aplicación (oculta inicialmente) -->
+            <div id="app-section" class="hidden fade-in">
+                <div class="flex items-center justify-between gap-4 mb-6 pb-4 border-b">
+                    <div class="flex items-center gap-4">
+                        <img src="logo.png" alt="Logo" class="h-10">
+                        <div>
+                            <h1 class="text-xl font-bold text-gray-800">Registro de Carga de Agua</h1>
+                            <p class="text-sm text-gray-600" id="user-info">Usuario: <span id="current-user"></span></p>
+                        </div>
+                    </div>
+                    <button id="logout-button" class="text-sm text-red-600 hover:text-red-800 flex items-center" title="Cerrar sesión">
+                        <i class="fas fa-sign-out-alt mr-1"></i> Salir
+                    </button>
+                </div>
+                
+                <form id="water-load-form" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="md:col-span-2">
+                        <label for="driver-name" class="block text-sm font-medium text-gray-700">Conductor</label>
+                        <input type="text" id="driver-name" required class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label for="plate-number" class="block text-sm font-medium text-gray-700">Placa</label>
+                        <input type="text" id="plate-number" required class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label for="initial-reading" class="block text-sm font-medium text-gray-700">Lectura Inicial (m³)</label>
+                        <input type="number" id="initial-reading" min="0" step="0.01" required class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label for="final-reading" class="block text-sm font-medium text-gray-700">Lectura Final (m³)</label>
+                        <input type="number" id="final-reading" min="0" step="0.01" required class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label for="calculated-volume" class="block text-sm font-medium text-gray-700">Volumen Calculado</label>
+                        <input type="text" id="calculated-volume" class="mt-1 w-full px-3 py-2 border bg-gray-100 border-gray-300 rounded-md shadow-sm font-bold" readonly>
+                    </div>
+                    <div>
+                        <label for="company-type" class="block text-sm font-medium text-gray-700">Tipo de Empresa</label>
+                        <select id="company-type" required class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="" disabled selected>Seleccione</option>
+                            <option value="Gobierno Nacional">Gobierno Nacional</option>
+                            <option value="Gobierno Departamental">Gobierno Departamental</option>
+                            <option value="Gobierno Municipal">Gobierno Municipal</option>
+                            <option value="Bomberos">Bomberos</option>
+                            <option value="Ayuda Comunitaria">Ayuda Comunitaria</option>
+                            <option value="Particular">Particular</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label for="company-name" class="block text-sm font-medium text-gray-700">Nombre Empresa/Entidad</label>
+                        <input type="text" id="company-name" required class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ej: Constructora Andina">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label for="employee-code" class="block text-sm font-medium text-gray-700">Código de Funcionario</label>
+                        <input type="text" id="employee-code" required class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ej: 1277">
+                    </div>
+                    <div class="lg:col-span-3">
+                        <label for="characteristics" class="block text-sm font-medium text-gray-700">Características / Observaciones</label>
+                        <textarea id="characteristics" rows="2" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                    </div>
+                    <div>
+                        <label for="ebap" class="block text-sm font-medium text-gray-700">EBAP</label>
+                        <select id="ebap" required class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="" disabled selected>Seleccione</option>
+                            <option value="Norte">Norte</option>
+                            <option value="Sur">Sur</option>
+                            <option value="Este">Este</option>
+                            <option value="Sudoeste">Sudoeste</option>
+                        </select>
+                    </div>
+                    
+                    <div class="lg:col-span-4 flex justify-end mt-4">
+                        <button type="submit" id="submit-button" class="w-full sm:w-auto flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-bold rounded-md shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transform hover:scale-105 transition duration-300 disabled:opacity-70 disabled:scale-100">
+                            <div class="loading-spinner"></div>
+                            <span class="btn-text"><i class="fas fa-database mr-2"></i>Guardar Registro</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+        
+        <!-- Temporizador de sesión -->
+        <div id="session-timer" class="session-timer hidden">
+            <i class="fas fa-clock mr-2"></i>
+            <span id="timer-text">Sesión: 30:00</span>
+        </div>
+    </main>
+
+    <script>
+        // ==============================================
+        // CONFIGURACIÓN
+        // ==============================================
+        const AUTH_SCRIPT_URL ="https://script.google.com/macros/s/AKfycbz-i7om1cRV3y7k-SMq7SIkVefSVOr06NpK6cnMh6uoCaQzELAUc_I3KVff8bbgqBCAuw/exec";
+        const SESSION_TIMEOUT = 30; // minutos
+        const TOKEN_KEY = 'water_auth_token';
+        const USER_KEY = 'water_user_data';
+
+        // ==============================================
+        // ELEMENTOS DEL DOM
+        // ==============================================
+        const loginSection = document.getElementById('login-section');
+        const appSection = document.getElementById('app-section');
+        const loginForm = document.getElementById('login-form');
+        const waterForm = document.getElementById('water-load-form');
+        const logoutButton = document.getElementById('logout-button');
+        const togglePassword = document.getElementById('toggle-password');
+        const passwordInput = document.getElementById('password');
+        const sessionTimer = document.getElementById('session-timer');
+        const timerText = document.getElementById('timer-text');
+        const currentUserSpan = document.getElementById('current-user');
+        const testConnectionBtn = document.getElementById('test-connection');
+
+        // ==============================================
+        // FUNCIONES DE AUTENTICACIÓN
+        // ==============================================
+
+        // Función para mostrar notificaciones
+        function showAlert(icon, title, text) {
+            Swal.fire({
+                icon: icon,
+                title: title,
+                text: text,
+                confirmButtonColor: '#2563eb'
+            });
+        }
+
+        // Función para iniciar sesión
+        async function loginUser(credentials) {
+            try {
+                // Mostrar estado de carga
+                document.getElementById('login-spinner').style.display = 'block';
+                document.querySelector('#login-button .btn-text').textContent = 'Verificando...';
+                
+                const response = await fetch(AUTH_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'login',
+                        username: credentials.username,
+                        password: credentials.password
+                    })
+                });
+                
+                // Verificar si la respuesta es válida
+                if (!response.ok) {
+                    throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Guardar información de sesión
+                    const userData = {
+                        token: data.token,
+                        username: data.user.username,
+                        role: data.user.role,
+                        loginTime: Date.now(),
+                        timeout: SESSION_TIMEOUT
+                    };
+                    
+                    // Almacenar en sessionStorage
+                    sessionStorage.setItem(TOKEN_KEY, data.token);
+                    sessionStorage.setItem(USER_KEY, JSON.stringify(userData));
+                    
+                    // Iniciar temporizador de sesión
+                    startSessionTimer();
+                    
+                    // Mostrar la aplicación
+                    showAppSection();
+                    
+                    showAlert('success', 'Éxito', 'Ha iniciado sesión correctamente.');
+                } else {
+                    showAlert('error', 'Error', data.message || 'Credenciales incorrectas.');
+                }
+            } catch (error) {
+                console.error('Error en login:', error);
+                
+                // Mensaje de error más específico
+                if (error.message.includes('Failed to fetch')) {
+                    showAlert('error', 'Error de conexión', 'No se pudo conectar con el servidor. Verifica: 1) Tu conexión a internet, 2) La URL del script, 3) Los permisos de despliegue.');
+                } else if (error.message.includes('HTTP')) {
+                    showAlert('error', 'Error del servidor', `El servidor respondió con error: ${error.message}`);
+                } else {
+                    showAlert('error', 'Error', 'No se pudo conectar con el servidor. Detalles: ' + error.message);
+                }
+            } finally {
+                // Restaurar estado normal del botón
+                document.getElementById('login-spinner').style.display = 'none';
+                document.querySelector('#login-button .btn-text').textContent = 'Ingresar al Sistema';
+            }
+        }
+
+        // Función para cerrar sesión
+        function logoutUser() {
+            // Limpiar datos de sesión
+            sessionStorage.removeItem(TOKEN_KEY);
+            sessionStorage.removeItem(USER_KEY);
+            
+            // Detener temporizador
+            if (window.sessionTimer) {
+                clearTimeout(window.sessionTimer);
+            }
+            
+            // Ocultar temporizador
+            sessionTimer.classList.add('hidden');
+            
+            // Mostrar login
+            showLoginSection();
+            
+            showAlert('info', 'Sesión cerrada', 'Ha cerrado sesión correctamente.');
+        }
+
+        // Función para verificar autenticación
+        function checkAuthentication() {
+            const token = sessionStorage.getItem(TOKEN_KEY);
+            const userData = sessionStorage.getItem(USER_KEY);
+            
+            if (!token || !userData) {
+                return false;
+            }
+            
+            try {
+                const user = JSON.parse(userData);
+                const currentTime = Date.now();
+                const elapsedTime = (currentTime - user.loginTime) / (1000 * 60);
+                
+                return elapsedTime <= user.timeout;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        // Función para validar token con el servidor
+        async function validateSession() {
+            const token = sessionStorage.getItem(TOKEN_KEY);
+            if (!token) return false;
+            
+            try {
+                const response = await fetch(AUTH_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'validateToken',
+                        token: token
+                    })
+                });
+                
+                const data = await response.json();
+                return data.success;
+            } catch (error) {
+                console.error('Error validando sesión:', error);
+                return false;
+            }
+        }
+
+        // ==============================================
+        // FUNCIONES DE INTERFAZ
+        // ==============================================
+
+        function showLoginSection() {
+            appSection.classList.add('hidden');
+            loginSection.classList.remove('hidden');
+            sessionTimer.classList.add('hidden');
+        }
+
+        function showAppSection() {
+            loginSection.classList.add('hidden');
+            appSection.classList.remove('hidden');
+            sessionTimer.classList.remove('hidden');
+            
+            // Mostrar información del usuario
+            const userData = JSON.parse(sessionStorage.getItem(USER_KEY) || '{}');
+            currentUserSpan.textContent = userData.username || '';
+        }
+
+        // Temporizador de sesión
+        function startSessionTimer() {
+            const userData = JSON.parse(sessionStorage.getItem(USER_KEY));
+            if (!userData) return;
+            
+            const updateTimer = () => {
+                const currentTime = Date.now();
+                const elapsedTime = (currentTime - userData.loginTime) / 1000;
+                const remainingTime = (userData.timeout * 60) - elapsedTime;
+                
+                if (remainingTime <= 0) {
+                    showAlert('warning', 'Sesión expirada', 'Su sesión ha caducado por inactividad.');
+                    logoutUser();
+                    return;
+                }
+                
+                const minutes = Math.floor(remainingTime / 60);
+                const seconds = Math.floor(remainingTime % 60);
+                timerText.textContent = `Sesión: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                
+                // Actualizar cada segundo
+                window.sessionTimer = setTimeout(updateTimer, 1000);
+            };
+            
+            updateTimer();
+        }
+
+        // Función para probar la conexión
+        async function testConnection() {
+            try {
+                showAlert('info', 'Probando conexión', 'Verificando conexión con el servidor...');
+                
+                const response = await fetch(AUTH_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'test'
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Error HTTP: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('success', 'Conexión exitosa', 'El servidor respondió correctamente.');
+                    console.log('Respuesta del servidor:', data);
+                } else {
+                    showAlert('warning', 'Problema del servidor', data.message);
+                }
+                
+                return data;
+            } catch (error) {
+                console.error('Error en prueba de conexión:', error);
+                showAlert('error', 'Error de conexión', 'No se pudo conectar con el servidor: ' + error.message);
+                return null;
+            }
+        }
+
+        // ==============================================
+        // MANEJADORES DE EVENTOS
+        // ==============================================
+
+        // Manejar envío del formulario de login
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                showAlert('warning', 'Campos requeridos', 'Por favor, complete todos los campos.');
+                return;
+            }
+            
+            await loginUser({ username, password });
+        });
+
+        // Manejar cierre de sesión
+        logoutButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            Swal.fire({
+                title: '¿Cerrar sesión?',
+                text: 'Está a punto de cerrar su sesión actual',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Sí, cerrar sesión',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    logoutUser();
+                }
+            });
+        });
+
+        // Mostrar/ocultar contraseña
+        togglePassword.addEventListener('click', () => {
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            
+            const icon = togglePassword.querySelector('i');
+            icon.classList.toggle('fa-eye');
+            icon.classList.toggle('fa-eye-slash');
+        });
+
+        // Probar conexión
+        testConnectionBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            testConnection();
+        });
+
+        // ==============================================
+        // INICIALIZACIÓN
+        // ==============================================
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Verificar si hay una sesión activa
+            const isAuthenticated = checkAuthentication();
+            
+            if (isAuthenticated) {
+                // Validar con el servidor
+                const isValid = await validateSession();
+                if (isValid) {
+                    showAppSection();
+                    startSessionTimer();
+                } else {
+                    logoutUser();
+                }
+            }
+            
+            // Cargar usuario recordado si existe
+            const rememberedUser = localStorage.getItem('remembered_user');
+            if (rememberedUser) {
+                document.getElementById('username').value = rememberedUser;
+                document.getElementById('remember-me').checked = true;
+            }
+            
+            // Recordar usuario si la casilla está marcada
+            document.getElementById('remember-me').addEventListener('change', (e) => {
+                const username = document.getElementById('username').value;
+                if (e.target.checked && username) {
+                    localStorage.setItem('remembered_user', username);
+                } else {
+                    localStorage.removeItem('remembered_user');
+                }
+            });
+            
+            // Cálculo de volumen (de tu código original)
+            const initialReadingInput = document.getElementById('initial-reading');
+            const finalReadingInput = document.getElementById('final-reading');
+            const calculatedVolumeInput = document.getElementById('calculated-volume');
+            
+            const updateCalculatedVolume = () => {
+                const initial = parseFloat(initialReadingInput.value) || 0;
+                const final = parseFloat(finalReadingInput.value) || 0;
+                calculatedVolumeInput.classList.remove('text-red-500');
+                
+                if (final < initial) {
+                    calculatedVolumeInput.value = 'Error';
+                    calculatedVolumeInput.classList.add('text-red-500');
+                    return 0;
+                }
+                
+                const volume = final - initial;
+                calculatedVolumeInput.value = volume.toFixed(2) + ' m³';
+                return volume;
+            };
+            
+            initialReadingInput.addEventListener('input', updateCalculatedVolume);
+            finalReadingInput.addEventListener('input', updateCalculatedVolume);
+            
+            // Manejar envío del formulario de agua
+            waterForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                if (!checkAuthentication()) {
+                    showAlert('error', 'Sesión expirada', 'Por favor, inicie sesión nuevamente.');
+                    logoutUser();
+                    return;
+                }
+                
+                const volume = updateCalculatedVolume();
+                if (volume <= 0 && waterForm.elements['final-reading'].value) {
+                    showAlert('error', 'Error', 'El volumen calculado debe ser mayor a cero. Verifique las lecturas.');
+                    return;
+                }
+                
+                // Aquí iría el código para enviar los datos a Google Sheets
+                // usando el token de autenticación
+                const userData = JSON.parse(sessionStorage.getItem(USER_KEY));
+                const formData = {
+                    action: 'saveData',
+                    token: userData.token,
+                    driverName: document.getElementById('driver-name').value,
+                    plateNumber: document.getElementById('plate-number').value,
+                    employeeCode: document.getElementById('employee-code').value,
+                    ebap: document.getElementById('ebap').value,
+                    initialReading: parseFloat(document.getElementById('initial-reading').value),
+                    finalReading: parseFloat(document.getElementById('final-reading').value),
+                    loadVolume: volume,
+                    companyType: document.getElementById('company-type').value,
+                    companyName: document.getElementById('company-name').value,
+                    characteristics: document.getElementById('characteristics').value,
+                    username: userData.username
+                };
+                
+                try {
+                    // Mostrar loading
+                    const submitBtn = document.getElementById('submit-button');
+                    submitBtn.classList.add('btn-loading');
+                    
+                    const response = await fetch(AUTH_SCRIPT_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(formData)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        showAlert('success', 'Éxito', 'Datos guardados correctamente.');
+                        waterForm.reset();
+                        calculatedVolumeInput.value = '';
+                    } else {
+                        showAlert('error', 'Error', result.message || 'Error al guardar datos.');
+                    }
+                } catch (error) {
+                    showAlert('error', 'Error', 'No se pudo conectar con el servidor.');
+                } finally {
+                    // Ocultar loading
+                    const submitBtn = document.getElementById('submit-button');
+                    submitBtn.classList.remove('btn-loading');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
